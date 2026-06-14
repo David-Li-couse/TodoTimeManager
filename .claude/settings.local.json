@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew assembleDebug)",
+      "Bash(where java *)",
+      "Read(//c/Program Files/Java/**)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/David.Li/.vscode/extensions/**)",
+      "Read(//d/java/jdk-21.0.6/bin/**)",
+      "Bash('D:\\\\java\\\\jdk-21.0.6\\\\bin\\\\java.exe' -version)",
+      "Bash(cd 'c:\\\\Users\\\\David.Li\\\\AndroidStudioProjects\\\\TodoTimeManager')",
+      "Bash(./gradlew --stop)",
+      "Bash(export JAVA_HOME='D:\\\\java\\\\jdk-21.0.6')"
+    ]
+  }
+}
