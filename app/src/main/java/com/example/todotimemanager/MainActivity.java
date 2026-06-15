@@ -275,7 +275,8 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.OnTas
             intent.putExtra("hours_before", hoursBefore);
 
             long taskId = task.getId();
-            int requestCode = (int) ((taskId % 100000000) * 10 + (hoursBefore == 48 ? 0 : 1));
+            int offset = hoursBefore == 48 ? 0 : (hoursBefore == 24 ? 1 : 2);
+            int requestCode = (int) ((taskId % 100000000) * 10 + offset);
 
             pendingIntent = PendingIntent.getBroadcast(
                     context, requestCode, intent,
@@ -329,8 +330,9 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.OnTas
             long safeId = taskId % 100000000;
             int requestCode48 = (int) (safeId * 10);
             int requestCode24 = (int) (safeId * 10 + 1);
+            int requestCode0 = (int) (safeId * 10 + 2);
 
-            // 取消两个闹钟（Intent需与设置时一致以确保PendingIntent匹配）
+            // 取消三个闹钟（Intent需与设置时一致以确保PendingIntent匹配）
             Intent intent48 = new Intent(context, AlarmReceiver.class);
             intent48.putExtra("task_title", "");
             intent48.putExtra("task_id", taskId);
@@ -348,6 +350,15 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.OnTas
                     context, requestCode24, intent24,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             alarmManager.cancel(pi24);
+
+            Intent intent0 = new Intent(context, AlarmReceiver.class);
+            intent0.putExtra("task_title", "");
+            intent0.putExtra("task_id", taskId);
+            intent0.putExtra("hours_before", 0);
+            PendingIntent pi0 = PendingIntent.getBroadcast(
+                    context, requestCode0, intent0,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            alarmManager.cancel(pi0);
         } catch (Exception e) {
             Log.w(TAG, "取消闹钟失败", e);
         }

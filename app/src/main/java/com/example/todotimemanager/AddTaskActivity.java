@@ -117,7 +117,7 @@ public class AddTaskActivity extends AppCompatActivity {
         tvReminder.setOnClickListener(v -> showDateTimePicker());
         btnClearReminder.setOnClickListener(v -> {
             deadlineTime = 0;
-            tvReminder.setText("点击选择截止时间（将在截止前48/24小时提醒）");
+            tvReminder.setText("点击选择截止时间（截止前48h/24h及截止时提醒）");
             btnClearReminder.setVisibility(View.GONE);
         });
 
@@ -321,7 +321,7 @@ public class AddTaskActivity extends AppCompatActivity {
     // ==================== 闹钟调度 ====================
 
     /**
-     * 调度截止前48h和24h的提醒闹钟。返回是否成功。
+     * 调度截止前48h、24h以及截止时的提醒闹钟。返回是否成功。
      * 必须在主线程调用。
      */
     private boolean scheduleDeadlineReminders(Task task) {
@@ -334,7 +334,7 @@ public class AddTaskActivity extends AppCompatActivity {
         long reminder48h = deadline - 48 * hourMs;
         long reminder24h = deadline - 24 * hourMs;
 
-        boolean ok48 = false, ok24 = false;
+        boolean ok48 = false, ok24 = false, okDeadline = false;
 
         if (reminder48h > System.currentTimeMillis()) {
             ok48 = MainActivity.setExactAlarm(this, task, reminder48h, 48);
@@ -342,8 +342,12 @@ public class AddTaskActivity extends AppCompatActivity {
         if (reminder24h > System.currentTimeMillis()) {
             ok24 = MainActivity.setExactAlarm(this, task, reminder24h, 24);
         }
+        // 截止时刻提醒
+        if (deadline > System.currentTimeMillis()) {
+            okDeadline = MainActivity.setExactAlarm(this, task, deadline, 0);
+        }
 
         // 只要能设置至少一个就算成功
-        return ok48 || ok24;
+        return ok48 || ok24 || okDeadline;
     }
 }

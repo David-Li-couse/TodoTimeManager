@@ -50,6 +50,11 @@ public class BootReceiver extends BroadcastReceiver {
                         MainActivity.setExactAlarm(context, task, reminder24h, 24);
                         count++;
                     }
+                    // 截止时刻提醒
+                    if (deadline > System.currentTimeMillis()) {
+                        MainActivity.setExactAlarm(context, task, deadline, 0);
+                        count++;
+                    }
                 }
                 Log.d(TAG, "已恢复 " + count + " 个提醒闹钟");
             } catch (Exception e) {

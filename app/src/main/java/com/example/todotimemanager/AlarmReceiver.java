@@ -37,6 +37,8 @@ public class AlarmReceiver extends BroadcastReceiver {
             contentText = "任务 \"" + taskTitle + "\" 将在48小时后截止，请尽快完成。";
         } else if (hoursBefore == 24) {
             contentText = "任务 \"" + taskTitle + "\" 将在24小时后截止，请尽快完成。";
+        } else if (hoursBefore == 0) {
+            contentText = "任务 \"" + taskTitle + "\" 已截止，请及时处理。";
         } else {
             contentText = "任务 \"" + taskTitle + "\" 即将截止。";
         }
@@ -53,8 +55,9 @@ public class AlarmReceiver extends BroadcastReceiver {
                     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                     .build();
 
-            // 48h和24h使用不同的通知ID，避免后触发的通知覆盖先触发的
-            int notifyId = (int) ((taskId * 10 + (hoursBefore == 48 ? 0 : 1)) % Integer.MAX_VALUE);
+            // 48h/24h/截止时使用不同的通知ID，避免后触发的通知覆盖先触发的
+            int offset = hoursBefore == 48 ? 0 : (hoursBefore == 24 ? 1 : 2);
+            int notifyId = (int) ((taskId * 10 + offset) % Integer.MAX_VALUE);
             notificationManager.notify(notifyId, notification);
         } catch (Exception e) {
             // 防止SecurityException(权限未授予)等异常导致崩溃
