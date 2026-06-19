@@ -3,6 +3,7 @@ package com.example.todotimemanager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -44,6 +45,20 @@ public class AlarmReceiver extends BroadcastReceiver {
         }
 
         try {
+            // 构建点击跳转的 Intent
+            Intent clickIntent = new Intent(context, MainActivity.class);
+            clickIntent.putExtra("from_notification", true);
+            clickIntent.putExtra("task_id", taskId);
+            clickIntent.putExtra("task_title", taskTitle);
+            clickIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+            PendingIntent pendingIntent = PendingIntent.getActivity(
+                    context,
+                    (int) taskId, // 使用 taskId 作为 requestCode 以确保不同通知不同
+                    clickIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+
             Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setContentTitle("⏰ 任务截止提醒")
@@ -53,6 +68,7 @@ public class AlarmReceiver extends BroadcastReceiver {
                     .setAutoCancel(true)
                     .setShowWhen(true)
                     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    .setContentIntent(pendingIntent)   // 添加点击跳转
                     .build();
 
             // 48h/24h/截止时使用不同的通知ID，避免后触发的通知覆盖先触发的

@@ -1,7 +1,9 @@
 package com.example.todotimemanager;
 
 import android.app.AlarmManager;
+import android.app.DatePickerDialog;
 import android.app.PendingIntent;
+import android.app.TimePickerDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -13,12 +15,15 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Toast;
 
+
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.example.todotimemanager.adapter.TaskAdapter;
@@ -27,6 +32,8 @@ import com.example.todotimemanager.viewmodel.TaskViewModel;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.tabs.TabLayout;
+
+import java.util.Calendar;
 
 public class MainActivity extends AppCompatActivity implements TaskAdapter.OnTaskClickListener {
 
@@ -48,6 +55,10 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.OnTas
     private Fragment deletedFragment;
     private Fragment currentFragment;
 
+    // 用于通知跳转的临时变量
+    private long notificationTaskId = -1;
+    private String notificationTaskTitle = "";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -68,6 +79,157 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.OnTas
         });
 
         requestNotificationPermissionIfNeeded();
+
+        // 处理从通知跳转过来的Intent
+        handleNotificationIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleNotificationIntent(intent);
+    }
+
+    /**
+     * 处理从通知跳转来的Intent，弹出任务操作对话框
+     */
+    private void handleNotificationIntent(Intent intent) {
+        if (intent == null) return;
+        boolean fromNotification = intent.getBooleanExtra("from_notification", false);
+        if (!fromNotification) return;
+        long taskId = intent.getLongExtra("task_id", -1);
+        String title = intent.getStringExtra("task_title");
+        if (taskId == -1) return;
+        notificationTaskId = taskId;
+        notificationTaskTitle = title != null ? title : "任务";
+        // 延迟一下，确保Activity完全显示
+        findViewById(android.R.id.content).post(() -> showNotificationDialog(taskId));
+    }
+
+    /**
+     * 显示通知跳转后的操作对话框
+     */
+    private void showNotificationDialog(long taskId) {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("任务处理")
+                .setMessage("请选择对任务 \"" + notificationTaskTitle + "\" 的操作")
+                .setPositiveButton("已完成", (dialog, which) -> markTaskAsCompleted(taskId))
+                .setNeutralButton("延长截止时间", (dialog, which) -> extendDeadline(taskId))
+                .setNegativeButton("取消", null)
+                .setCancelable(true)
+                .show();
+    }
+
+    /**
+     * 标记任务为已完成
+     */
+    private void markTaskAsCompleted(long taskId) {
+        final LiveData<Task> taskLiveData = taskViewModel.getTaskById(taskId);
+        Observer<Task> observer = new Observer<Task>() {
+            @Override
+            public void onChanged(Task task) {
+                if (task != null) {
+                    task.setCompleted(true);
+                    taskViewModel.update(task);
+                    MainActivity.cancelAlarmForTask(MainActivity.this, taskId);
+                    Toast.makeText(MainActivity.this, "任务已标记为完成", Toast.LENGTH_SHORT).show();
+                }
+                taskLiveData.removeObserver(this);  // 用同一个实例移除
+            }
+        };
+        taskLiveData.observe(this, observer);
+    }
+
+    /**
+     * 延长截止时间（弹出日期时间选择器）
+     */
+    private void extendDeadline(long taskId) {
+        final LiveData<Task> taskLiveData = taskViewModel.getTaskById(taskId);
+        Observer<Task> observer = new Observer<Task>() {
+            @Override
+            public void onChanged(Task task) {
+                if (task == null) {
+                    taskLiveData.removeObserver(this);
+                    return;
+                }
+                taskLiveData.removeObserver(this);  // 提前移除，防止后续 update 导致二次触发
+                Calendar calendar = Calendar.getInstance();
+                long currentDeadline = task.getReminderTime();
+                if (currentDeadline > 0) {
+                    calendar.setTimeInMillis(currentDeadline);
+                }
+                showDateTimePickerForExtension(task, calendar);
+            }
+        };
+        taskLiveData.observe(this, observer);
+    }
+
+    /**
+     * 显示日期选择器（延长截止时间）
+     */
+    private void showDateTimePickerForExtension(Task task, Calendar calendar) {
+        DatePickerDialog datePicker = new DatePickerDialog(this,
+                (view, year, month, dayOfMonth) -> {
+                    calendar.set(year, month, dayOfMonth);
+                    showTimePickerForExtension(task, calendar);
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH));
+        datePicker.getDatePicker().setMinDate(System.currentTimeMillis() - 1000);
+        datePicker.show();
+    }
+
+    /**
+     * 显示时间选择器（延长截止时间）
+     */
+    private void showTimePickerForExtension(Task task, Calendar calendar) {
+        new TimePickerDialog(this,
+                (view, hourOfDay, minute) -> {
+                    calendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                    calendar.set(Calendar.MINUTE, minute);
+                    calendar.set(Calendar.SECOND, 0);
+                    calendar.set(Calendar.MILLISECOND, 0);
+                    long newDeadline = calendar.getTimeInMillis();
+                    if (newDeadline <= System.currentTimeMillis()) {
+                        Toast.makeText(MainActivity.this, "截止时间必须是将来的时间", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    // 更新任务
+                    task.setReminderTime(newDeadline);
+                    taskViewModel.update(task);
+                    // 取消旧的闹钟，设置新的
+                    MainActivity.cancelAlarmForTask(MainActivity.this, task.getId());
+                    boolean ok = scheduleDeadlineReminders(task);
+                    String msg = ok ? "截止时间已延长，提醒已更新" : "截止时间已延长，但提醒设置失败";
+                    Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
+                },
+                calendar.get(Calendar.HOUR_OF_DAY),
+                calendar.get(Calendar.MINUTE),
+                true).show();
+    }
+
+    /**
+     * 调度截止提醒闹钟（复用现有逻辑）
+     */
+    private boolean scheduleDeadlineReminders(Task task) {
+        long deadline = task.getReminderTime();
+        if (deadline <= System.currentTimeMillis()) return false;
+        final long hourMs = DEBUG_FAST_REMINDERS ? 1000L : 60 * 60 * 1000L;
+        long reminder48h = deadline - 48 * hourMs;
+        long reminder24h = deadline - 24 * hourMs;
+        boolean ok48 = false, ok24 = false, okDeadline = false;
+        if (reminder48h > System.currentTimeMillis()) {
+            ok48 = setExactAlarm(this, task, reminder48h, 48);
+        }
+        if (reminder24h > System.currentTimeMillis()) {
+            ok24 = setExactAlarm(this, task, reminder24h, 24);
+        }
+        if (deadline > System.currentTimeMillis()) {
+            okDeadline = setExactAlarm(this, task, deadline, 0);
+        }
+        return ok48 || ok24 || okDeadline;
     }
 
     private void setupTabs() {
